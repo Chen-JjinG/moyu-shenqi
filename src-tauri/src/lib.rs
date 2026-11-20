@@ -13,12 +13,101 @@ struct DiagState {
 
 const FILTER: &str = "invert(0.9) hue-rotate(180deg) grayscale(0.62) sepia(0.4) hue-rotate(165deg) brightness(0.98) contrast(0.95)";
 
+/// Waveform overlay injected into the page. Painted above the document, clicks pass through.
+/// Colors match `paintFusedChart` in src/charts.ts. The filter stays on `body`, so this canvas is not recolored.
+const VEIL_JS: &str = r#"
+  let __veilSpec=null;
+  function __veilCanvas(){
+    let c=document.getElementById("diag-veil");
+    if(c&&c.isConnected) return c;
+    c=document.createElement("canvas");
+    c.id="diag-veil";
+    c.setAttribute("aria-hidden","true");
+    const s=c.style;
+    s.position="fixed";
+    s.left="0"; s.top="0"; s.right="0"; s.bottom="0";
+    s.width="100%"; s.height="100%";
+    s.setProperty("pointer-events","none","important");
+    s.setProperty("z-index","2147483647","important");
+    s.display="none";
+    s.background="transparent";
+    (document.documentElement||document.body).appendChild(c);
+    return c;
+  }
+  function __tri(ctx,x,y,color){
+    ctx.fillStyle=color;
+    ctx.beginPath();
+    ctx.moveTo(x,y+6);
+    ctx.lineTo(x-4.5,y);
+    ctx.lineTo(x+4.5,y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  function __paintVeil(spec){
+    const c=__veilCanvas();
+    if(!spec||!spec.pts||spec.pts.length<2){
+      c.style.display="none";
+      __veilSpec=null;
+      return;
+    }
+    __veilSpec=spec;
+    c.style.display="block";
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    const w=c.clientWidth||window.innerWidth;
+    const h=c.clientHeight||window.innerHeight;
+    if(w<2||h<2) return;
+    const pw=Math.max(1,Math.floor(w*dpr));
+    const ph=Math.max(1,Math.floor(h*dpr));
+    if(c.width!==pw||c.height!==ph){ c.width=pw; c.height=ph; }
+    const ctx=c.getContext("2d");
+    if(!ctx) return;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+    const grid=spec.grid||[];
+    ctx.lineWidth=1;
+    ctx.strokeStyle="rgba(255,255,255,0.16)";
+    ctx.beginPath();
+    for(let i=0;i<grid.length;i++){
+      const x=grid[i]*w;
+      ctx.moveTo(x,0); ctx.lineTo(x,h);
+    }
+    ctx.stroke();
+    ctx.fillStyle="rgba(16,20,24,0.2)";
+    ctx.fillRect(0,0,w,h);
+    const pts=spec.pts;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0]*w,h);
+    for(let i=0;i<pts.length;i++) ctx.lineTo(pts[i][0]*w,pts[i][1]*h);
+    ctx.lineTo(pts[pts.length-1][0]*w,h);
+    ctx.closePath();
+    ctx.fillStyle="rgba(93,151,176,0.5)";
+    ctx.fill();
+    ctx.beginPath();
+    for(let i=0;i<pts.length;i++){
+      const x=pts[i][0]*w, y=pts[i][1]*h;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle="rgba(32,68,86,0.7)";
+    ctx.lineWidth=2.6;
+    ctx.stroke();
+    ctx.strokeStyle="rgba(214,238,246,0.96)";
+    ctx.lineWidth=1.25;
+    ctx.stroke();
+    const gcs=spec.gcs||[];
+    for(let i=0;i<gcs.length;i++) __tri(ctx,gcs[i][0]*w,gcs[i][1]*h-1,"#e6c34a");
+    const snaps=spec.snaps||[];
+    for(let i=0;i<snaps.length;i++) __tri(ctx,snaps[i][0]*w,snaps[i][1]*h-1,"#3aa0e6");
+  }
+  window.__diagVeil=__paintVeil;
+  window.addEventListener("resize",function(){ if(__veilSpec) __paintVeil(__veilSpec); });
+"#;
+
 fn boot_script(initial_on: bool) -> String {
     let initial = if initial_on { "true" } else { "false" };
     format!(
         r#"(()=>{{
   const INITIAL={initial};
-  const CSS="html.diag-on{{filter:{filter}!important;background:#e8e8e8!important}}";
+  const CSS="html.diag-on{{background:#243038!important}}html.diag-on body{{filter:{filter}!important;background:#e8e8e8!important}}";
   let on=INITIAL;
   try{{
     if(typeof window.name==="string"&&window.name.indexOf("diag:")===0) on=window.name.slice(5)!=="off";
@@ -44,6 +133,7 @@ fn boot_script(initial_on: bool) -> String {
   window.__diagSet=apply;
   if(document.documentElement) apply(on);
   document.addEventListener("DOMContentLoaded", function(){{ apply(on); }});
+  {veil}
   window.addEventListener("keydown", function(e){{
     const k=(e.key||"").toLowerCase();
     let cmd="";
@@ -66,7 +156,8 @@ fn boot_script(initial_on: bool) -> String {
   }}, true);
 }})();"#,
         initial = initial,
-        filter = FILTER
+        filter = FILTER,
+        veil = VEIL_JS
     )
 }
 
@@ -236,6 +327,24 @@ fn set_bounds(
 }
 
 #[tauri::command]
+fn set_chart_veil(
+    app: AppHandle,
+    webview: tauri::Webview,
+    spec: Option<serde_json::Value>,
+) -> Result<(), String> {
+    shell_only(webview.label())?;
+    let Some(page) = app.get_webview("page") else {
+        return Ok(());
+    };
+    let arg = match spec {
+        Some(value) => value.to_string(),
+        None => "null".to_string(),
+    };
+    let js = format!("try{{window.__diagVeil({arg})}}catch(e){{}}");
+    page.eval(js).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 fn nav(app: AppHandle, webview: tauri::Webview, action: String) -> Result<(), String> {
     shell_only(webview.label())?;
     let Some(page) = app.get_webview("page") else {
@@ -305,6 +414,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_url,
             set_bounds,
+            set_chart_veil,
             nav,
             set_filtered,
             set_page_zoom,

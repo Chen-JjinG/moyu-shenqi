@@ -187,9 +187,30 @@ button { background: none; border: 0; padding: 0; cursor: default; }
 }
 .pause span { width: 2px; height: 8px; background: #ddd; display: block; }
 .pause.on { background: #094771; border-color: #007acc; }
-.plot-mem { height: 104px; }
+.plot-mem { height: 104px; position: relative; overflow: hidden; }
+#app[data-browsing="1"] .plot-mem { height: 160px; }
 .plot-cpu { height: 68px; }
-.plot canvas, .ruler-wrap canvas, .event-row canvas { width: 100%; height: 100%; display: block; }
+#c-mem, #c-cpu, .ruler-wrap canvas, .event-row canvas { width: 100%; height: 100%; display: block; }
+.mem-slot {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 4px;
+  bottom: 16px;
+  z-index: 1;
+  overflow: hidden;
+}
+#mem-veil {
+  position: absolute;
+  left: 28px;
+  top: 4px;
+  width: calc(100% - 56px);
+  height: calc(100% - 20px);
+  z-index: 3;
+  pointer-events: none;
+  visibility: hidden;
+}
+#mem-veil.on { visibility: visible; }
 
 .vs-tabs {
   height: 28px;
@@ -272,7 +293,7 @@ button { background: none; border: 0; padding: 0; cursor: default; }
 .stage[data-show="empty"] .ph-empty { display: flex; }
 .stage[data-show="heap"] .ph-heap { display: block; }
 .stage[data-show="code"] .ph-code { display: block; }
-.stage[data-show="ad"] .ph-ad { display: block; }
+.stage[data-show="ad"] .ph-ad { display: flex; flex-direction: column; }
 .ph-empty {
   align-items: center;
   justify-content: center;
@@ -570,73 +591,117 @@ button { background: none; border: 0; padding: 0; cursor: default; }
   padding: 8px 10px 6px;
   overflow: auto;
   height: 100%;
+  gap: 8px;
+  min-height: 0;
 }
 .ph-ad, .ph-ad * { cursor: default; user-select: none; }
-.ad-top { display: flex; align-items: center; gap: 10px; }
-.ad-brand { display: flex; gap: 8px; align-items: center; min-width: 120px; }
-.hj {
-  width: 36px; height: 36px; border-radius: 8px;
-  background: linear-gradient(#2fce73, #149454);
-  color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 18px;
+.ad-feature {
+  flex: 1 1 auto;
+  min-height: 188px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(168px, 0.78fr);
+  grid-template-rows: minmax(168px, 1fr);
+  gap: 10px;
+  align-items: stretch;
 }
-.ad-brand strong { display: block; font-size: 14px; color: #178a48; }
-.ad-brand small { color: #888; }
-.ad-offer { flex: 1; }
-.price { color: #ff5a00; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; line-height: 1.1; }
-.price b { font-size: 32px; }
-.sub { color: #888; font-size: 12px; }
-.mascot { width: 92px; height: 58px; position: relative; flex: none; }
+.ad-hero-frame {
+  position: relative;
+  min-height: 168px;
+  height: 100%;
+  border: 1px solid #e4d3ae;
+  background: #f3ead6;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(80, 50, 10, 0.08);
+}
+.ad-hero { position: absolute; inset: 0; }
+.ad-art {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background:
+    radial-gradient(circle at 82% 16%, rgba(176, 42, 36, 0.16), transparent 22%),
+    repeating-linear-gradient(0deg, rgba(90, 60, 20, 0.045) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg, #fbf6ea 0%, #f3e6c8 68%, #e7d3a4 100%);
+  color: #2b2416;
+}
+.ad-art-py { letter-spacing: 2px; color: #8a7040; font-size: 13px; }
+.ad-art-word {
+  font-family: "KaiTi", "STKaiti", "FangSong", "Songti SC", serif;
+  font-size: 54px;
+  line-height: 1.05;
+  margin-top: 4px;
+}
+.ad-art-sub { margin-top: 8px; color: #8a7040; font-size: 12px; letter-spacing: 2px; }
+.ad-seal {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 36px;
+  height: 36px;
+  border: 2px solid rgba(176, 42, 36, 0.75);
+  color: rgba(176, 42, 36, 0.8);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-family: "KaiTi", "STKaiti", serif;
+  font-size: 16px;
+  transform: rotate(-12deg);
+}
+.ad-side { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.ad-banner { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.ad-promo { min-width: 0; }
+.ad-brand { display: flex; gap: 6px; align-items: center; }
+.hj {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: linear-gradient(#2fce73, #149454);
+  color: #fff; font-weight: 700; display: grid; place-items: center; font-size: 15px;
+  flex: none;
+}
+.ad-brand strong { display: block; font-size: 13px; color: #178a48; line-height: 1.2; }
+.ad-brand small { color: #888; font-size: 11px; }
+.ad-offer { margin-top: 2px; }
+.price { color: #ff5a00; font-size: 18px; font-weight: 800; letter-spacing: 0.5px; line-height: 1.05; }
+.price b { font-size: 26px; }
+.sub { color: #888; font-size: 11px; }
+.mascot { width: 72px; height: 52px; position: relative; flex: none; }
 .bubble {
   position: absolute; left: 0; top: 0;
   background: #fff7ea; border: 1px solid #ffd7a8; border-radius: 8px;
-  font-size: 11px; color: #d35400; padding: 3px 6px; line-height: 1.25;
+  font-size: 10px; color: #d35400; padding: 2px 5px; line-height: 1.2;
 }
 .face {
-  position: absolute; right: 0; bottom: 0; width: 40px; height: 40px; border-radius: 50%;
+  position: absolute; right: 0; bottom: 0; width: 36px; height: 36px; border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 40%, #3a2a22 3px, transparent 4px),
-    radial-gradient(circle at 65% 40%, #3a2a22 3px, transparent 4px),
-    radial-gradient(circle at 50% 62%, #e07070 5px, transparent 6px),
+    radial-gradient(circle at 35% 40%, #3a2a22 2.5px, transparent 3.2px),
+    radial-gradient(circle at 65% 40%, #3a2a22 2.5px, transparent 3.2px),
+    radial-gradient(circle at 50% 62%, #e07070 4px, transparent 5px),
     linear-gradient(#ffd7b5, #f3b183);
-  box-shadow: 0 0 0 3px #ffe0c2;
+  box-shadow: 0 0 0 2px #ffe0c2;
 }
+.ad-copy { min-width: 0; }
 .ad-headline {
-  margin: 8px 0 6px;
-  font-size: 16px;
+  margin: 0 0 6px;
+  font-size: 15px;
   font-weight: 700;
   color: #1a3e8a;
+  line-height: 1.35;
 }
-.ad-grid { display: grid; grid-template-columns: 1.3fr 0.9fr; gap: 8px; }
-.paper {
-  background: linear-gradient(#fffaf0, #f6edd8);
-  border: 1px solid #ead9b0;
-  border-radius: 4px;
-  padding: 8px 10px 10px;
-  min-height: 132px;
-}
-.py { letter-spacing: 1px; color: #8a7040; font-size: 12px; }
-.word {
-  font-family: "KaiTi", "STKaiti", "FangSong", "Songti SC", serif;
-  font-size: 40px;
-  line-height: 1.15;
-  color: #2b2416;
-}
-.paper p { margin: 6px 0; color: #5c5344; font-size: 12px; line-height: 1.55; }
+.ad-copy p { margin: 0 0 6px; color: #5c5344; font-size: 12px; line-height: 1.55; }
 .more { color: #245bdb; font-size: 12px; }
-.hot { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.hot li { display: flex; gap: 8px; align-items: center; color: #245bdb; font-size: 13px; }
-.hot em { display: block; color: #999; font-style: normal; font-size: 11px; }
-.th { width: 42px; height: 32px; border-radius: 3px; flex: none; display: block; }
-.th.a { background: linear-gradient(135deg, #69d2ff, #3a7bd5); }
-.th.b { background: linear-gradient(135deg, #f6d365, #fda085); }
-.th.c { background: linear-gradient(135deg, #84fab0, #8fd3f4); }
-.th.d { background: linear-gradient(135deg, #a18cd1, #fbc2eb); }
-.ad-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
-.card { font-size: 12px; color: #333; }
-.phc { display: block; height: 52px; border-radius: 3px; margin-bottom: 4px; }
-.p1 { background: linear-gradient(#3a2a22, #c4a574); }
-.p2 { background: linear-gradient(#ff8a00, #e52e71); }
-.p3 { background: linear-gradient(#134e5e, #71b280); }
+.ad-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: none; }
+.ad-list li { display: flex; gap: 8px; align-items: center; min-height: 32px; }
+.ad-list b { display: block; color: #245bdb; font-size: 13px; font-weight: 600; line-height: 1.2; }
+.ad-list em { display: block; color: #999; font-style: normal; font-size: 11px; }
+.th { width: 46px; height: 32px; border-radius: 3px; flex: none; display: block; }
+.th.a { background: linear-gradient(135deg, #3a4a6b, #6d8eb5 40%, #c4a574); }
+.th.b { background: linear-gradient(135deg, #69d2ff, #3a7bd5); }
+.th.c { background: linear-gradient(135deg, #1d3557, #457b9d 50%, #a8dadc); }
+.th.d { background: linear-gradient(135deg, #f6d365, #fda085); }
 
 /* ---------- overlays (outside zoom) ---------- */
 #addr, #menu, #hud { font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif; }

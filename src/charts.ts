@@ -1,5 +1,15 @@
 /** Low-frequency canvas traces. One sample per second, drawn only while the diagnostic theme is visible. */
 
+/** Inner plot rectangle of the process-memory canvas. `.mem-slot` / `#mem-veil` use the same insets. */
+export const MEM_INSET = { left: 28, right: 28, top: 4, bottom: 16 };
+
+export type VeilSpec = {
+  pts: number[][];
+  gcs: number[][];
+  snaps: number[][];
+  grid: number[];
+};
+
 export type Monitor = {
   step: (t: number) => void;
   seed: (seconds: number) => void;
@@ -11,6 +21,8 @@ export type Monitor = {
   zoomReset: () => void;
   bump: (t: number) => void;
   current: () => { mem: number; cpu: number };
+  veilSpec: (elapsed: number) => VeilSpec | null;
+  paintVeil: (canvas: HTMLCanvasElement, elapsed: number) => void;
 };
 
 type Pt = { t: number; v: number };
@@ -61,6 +73,58 @@ function tri(ctx: CanvasRenderingContext2D, x: number, y: number, color: string)
   ctx.fill();
 }
 
+function round4(n: number): number {
+  return Math.round(n * 10000) / 10000;
+}
+
+type Mark = { x: number; y: number };
+
+/** Translucent waveform painted over the live page. Same shape as the memory chart. */
+function paintFusedChart(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  pts: Mark[],
+  gcs: Mark[],
+  snaps: Mark[],
+  grid: number[],
+) {
+  ctx.clearRect(0, 0, w, h);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255,255,255,0.16)";
+  ctx.beginPath();
+  for (const x of grid) {
+    ctx.moveTo(x * w, 0);
+    ctx.lineTo(x * w, h);
+  }
+  ctx.stroke();
+  ctx.fillStyle = "rgba(16, 20, 24, 0.2)";
+  ctx.fillRect(0, 0, w, h);
+  if (pts.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x * w, h);
+  for (const p of pts) ctx.lineTo(p.x * w, p.y * h);
+  ctx.lineTo(pts[pts.length - 1].x * w, h);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(93, 151, 176, 0.5)";
+  ctx.fill();
+  ctx.beginPath();
+  pts.forEach((p, i) => {
+    const x = p.x * w;
+    const y = p.y * h;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = "rgba(32, 68, 86, 0.7)";
+  ctx.lineWidth = 2.6;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(214, 238, 246, 0.96)";
+  ctx.lineWidth = 1.25;
+  ctx.stroke();
+  for (const m of gcs) tri(ctx, m.x * w, m.y * h - 1, "#e6c34a");
+  for (const m of snaps) tri(ctx, m.x * w, m.y * h - 1, "#3aa0e6");
+}
+
 export function createMonitor(): Monitor {
   let mem = 15.8;
   let cpu = 2.2;
@@ -102,12 +166,50 @@ export function createMonitor(): Monitor {
     while (snaps.length && snaps[0] < keep) snaps.shift();
   }
 
+  type Geo = {
+    pts: Mark[];
+    gcs: Mark[];
+    snaps: Mark[];
+    grid: number[];
+    axis: number;
+    start: number;
+    end: number;
+  };
+
+  function memoryGeometry(elapsed: number): Geo | null {
+    const span = SPANS[spanIdx];
+    const dom = domain(elapsed, span, zoomed);
+    const pts = memS.filter((p) => p.t >= dom.start && p.t <= dom.end);
+    if (!pts.length) return null;
+    let max = 1;
+    for (const p of pts) if (p.v > max) max = p.v;
+    const axis = niceTop(max);
+    const widthT = Math.max(0.001, dom.end - dom.start);
+    const xN = (t: number) => (t - dom.start) / widthT;
+    const yN = (v: number) => 1 - v / axis;
+    const nearest = (t: number) => pts.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a));
+    const marks = (ts: number[]) =>
+      ts.filter((t) => t >= dom.start && t <= dom.end).map((t) => ({ x: xN(t), y: yN(nearest(t).v) }));
+    const major = widthT <= 40 ? 10 : widthT <= 90 ? 15 : 30;
+    const grid: number[] = [];
+    for (let t = Math.ceil(dom.start / major) * major; t <= dom.end; t += major) grid.push(xN(t));
+    return {
+      pts: pts.map((p) => ({ x: xN(p.t), y: yN(p.v) })),
+      gcs: marks(gcs),
+      snaps: marks(snaps),
+      grid,
+      axis,
+      start: dom.start,
+      end: dom.end,
+    };
+  }
+
   function draw(elapsed: number) {
     const span = SPANS[spanIdx];
     const dom = domain(elapsed, span, zoomed);
     drawRuler(dom);
     drawEvents(dom);
-    drawMem(dom);
+    drawMem(elapsed);
     drawCpu(dom);
   }
 
@@ -173,7 +275,7 @@ export function createMonitor(): Monitor {
     }
   }
 
-  function drawMem(dom: { start: number; end: number }) {
+  function drawMem(elapsed: number) {
     const canvas = memC();
     if (!canvas) return;
     const ctx = fit(canvas);
@@ -181,59 +283,51 @@ export function createMonitor(): Monitor {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     ctx.clearRect(0, 0, w, h);
-    const left = 28;
-    const right = 28;
+    const left = MEM_INSET.left;
+    const right = MEM_INSET.right;
+    const top = MEM_INSET.top;
+    const bottom = h - MEM_INSET.bottom;
     const plotW = Math.max(1, w - left - right);
-    const top = 4;
-    const bottom = h - 16;
     const plotH = Math.max(1, bottom - top);
-    let max = 1;
-    for (const p of memS) if (p.t >= dom.start && p.t <= dom.end && p.v > max) max = p.v;
-    const axis = niceTop(max);
+    const geo = memoryGeometry(elapsed);
+    const axis = geo?.axis ?? 18;
+    const start = geo?.start ?? 0;
+    const end = geo?.end ?? Math.max(elapsed, 12);
+    const span = Math.max(0.001, end - start);
     ctx.strokeStyle = "#2f2f2f";
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    const span = dom.end - dom.start;
     const major = span <= 40 ? 10 : span <= 90 ? 15 : 30;
-    for (let t = Math.ceil(dom.start / major) * major; t <= dom.end; t += major) {
-      const x = xOf(t, dom.start, dom.end, left, plotW);
+    for (let t = Math.ceil(start / major) * major; t <= end; t += major) {
+      const x = left + ((t - start) / span) * plotW;
       ctx.moveTo(x, top);
       ctx.lineTo(x, bottom);
     }
     ctx.stroke();
     ctx.strokeStyle = "#3f3f46";
     ctx.strokeRect(left + 0.5, top + 0.5, plotW, plotH);
-
-    const pts = memS.filter((p) => p.t >= dom.start && p.t <= dom.end);
-    if (pts.length) {
-      const yOf = (v: number) => bottom - (v / axis) * plotH;
+    if (geo && geo.pts.length) {
+      const X = (n: number) => left + n * plotW;
+      const Y = (n: number) => top + n * plotH;
       ctx.beginPath();
-      ctx.moveTo(xOf(pts[0].t, dom.start, dom.end, left, plotW), bottom);
-      for (const p of pts) ctx.lineTo(xOf(p.t, dom.start, dom.end, left, plotW), yOf(p.v));
-      const last = pts[pts.length - 1];
-      ctx.lineTo(xOf(last.t, dom.start, dom.end, left, plotW), bottom);
+      ctx.moveTo(X(geo.pts[0].x), bottom);
+      for (const p of geo.pts) ctx.lineTo(X(p.x), Y(p.y));
+      ctx.lineTo(X(geo.pts[geo.pts.length - 1].x), bottom);
       ctx.closePath();
       ctx.fillStyle = "#5d97b0";
       ctx.fill();
       ctx.beginPath();
-      pts.forEach((p, i) => {
-        const x = xOf(p.t, dom.start, dom.end, left, plotW);
-        const y = yOf(p.v);
+      geo.pts.forEach((p, i) => {
+        const x = X(p.x);
+        const y = Y(p.y);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
       ctx.strokeStyle = "#8ec3d4";
       ctx.lineWidth = 1;
       ctx.stroke();
-      for (const t of gcs) {
-        if (t < dom.start || t > dom.end) continue;
-        const nearest = pts.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a));
-        tri(ctx, xOf(t, dom.start, dom.end, left, plotW), yOf(nearest.v) - 1, "#e6c34a");
-      }
-      for (const t of snaps) {
-        if (t < dom.start || t > dom.end) continue;
-        const nearest = pts.reduce((a, b) => (Math.abs(b.t - t) < Math.abs(a.t - t) ? b : a));
-        tri(ctx, xOf(t, dom.start, dom.end, left, plotW), yOf(nearest.v) - 1, "#3aa0e6");
-      }
+      for (const m of geo.gcs) tri(ctx, X(m.x), Y(m.y) - 1, "#e6c34a");
+      for (const m of geo.snaps) tri(ctx, X(m.x), Y(m.y) - 1, "#3aa0e6");
     }
     ctx.fillStyle = "#c8c8c8";
     ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
@@ -312,5 +406,28 @@ export function createMonitor(): Monitor {
       boostUntil = t + 2.4;
     },
     current: () => ({ mem, cpu }),
+    veilSpec: (elapsed) => {
+      const geo = memoryGeometry(elapsed);
+      if (!geo || geo.pts.length < 2) return null;
+      const pack = (p: Mark) => [round4(p.x), round4(p.y)];
+      return {
+        pts: geo.pts.map(pack),
+        gcs: geo.gcs.map(pack),
+        snaps: geo.snaps.map(pack),
+        grid: geo.grid.map(round4),
+      };
+    },
+    paintVeil: (canvas, elapsed) => {
+      const geo = memoryGeometry(elapsed);
+      const ctx = fit(canvas);
+      if (!ctx) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (!geo) {
+        ctx.clearRect(0, 0, w, h);
+        return;
+      }
+      paintFusedChart(ctx, w, h, geo.pts, geo.gcs, geo.snaps, geo.grid);
+    },
   };
 }
