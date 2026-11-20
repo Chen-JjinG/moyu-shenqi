@@ -1,4 +1,7 @@
 html:not([data-diag-off]) {
+  background-color: #243038 !important;
+}
+html:not([data-diag-off]) body {
   filter: invert(0.9) hue-rotate(180deg) grayscale(0.62) sepia(0.4) hue-rotate(165deg) brightness(0.98) contrast(0.95) !important;
   background-color: #e8e8e8 !important;
 }

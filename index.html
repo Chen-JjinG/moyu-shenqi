@@ -52,7 +52,11 @@
               <span><i class="mark bytes"></i>专用字节</span>
             </div>
           </div>
-          <div class="block-body plot plot-mem"><canvas id="c-mem"></canvas></div>
+          <div class="block-body plot plot-mem">
+            <canvas id="c-mem"></canvas>
+            <div class="mem-slot" id="mem-slot"></div>
+            <canvas id="mem-veil"></canvas>
+          </div>
         </div>
         <div class="block" data-block="cpu">
           <button class="block-h" type="button"><i class="chev"></i>CPU (所有处理器的百分比)</button>
@@ -240,43 +244,50 @@
         </header>
         <div class="stage ad-stage" data-show="ad">
           <div class="ph ph-ad">
-            <div class="ad-top">
-              <div class="ad-brand">
-                <span class="hj">沪</span>
-                <div>
-                  <strong>沪江网校</strong>
-                  <small>外语好课 · 随时学</small>
+            <div class="ad-feature">
+              <div class="ad-hero-frame">
+                <div class="ad-hero" id="ad-hero">
+                  <div class="ad-art">
+                    <div class="ad-art-py">yè &nbsp; míng &nbsp; shā</div>
+                    <div class="ad-art-word">夜明砂</div>
+                    <div class="ad-art-sub">平肝 · 明目</div>
+                    <i class="ad-seal" aria-hidden="true">赏</i>
+                  </div>
                 </div>
               </div>
-              <div class="ad-offer">
-                <div class="price"><b>9</b>元微课学</div>
-                <div class="sub">11课外语任你选</div>
-              </div>
-              <div class="mascot" aria-hidden="true">
-                <div class="bubble">今天的词<br />很安静</div>
-                <div class="face"></div>
+              <div class="ad-side">
+                <div class="ad-banner">
+                  <div class="ad-promo">
+                    <div class="ad-brand">
+                      <span class="hj">沪</span>
+                      <div>
+                        <strong>沪江网校</strong>
+                        <small>外语好课 · 随时学</small>
+                      </div>
+                    </div>
+                    <div class="ad-offer">
+                      <div class="price"><b>9</b>元敞开学</div>
+                      <div class="sub">11国外语任你选</div>
+                    </div>
+                  </div>
+                  <div class="mascot" aria-hidden="true">
+                    <div class="bubble">今天的词<br />很安静</div>
+                    <div class="face"></div>
+                  </div>
+                </div>
+                <div class="ad-copy">
+                  <div class="ad-headline">中医文化：美到极致的中药名</div>
+                  <p>美到极致的中药名，往往不是花。夜明砂听着像夜里的细沙，旧方里却是一味平肝明目的药。你不想知道这些字背后的意思吗？</p>
+                  <span class="more">去看看 &gt;</span>
+                </div>
               </div>
             </div>
-            <div class="ad-headline">中医文化：美到极致的中药名</div>
-            <div class="ad-grid">
-              <div class="paper">
-                <div class="py">yè &nbsp; míng &nbsp; shā</div>
-                <div class="word">夜明砂</div>
-                <p>名字干净得像夜里的细沙。旧方里它是一味平肝明目的药，听着却像一句诗。美到极致的中药名，往往不是花，是这种安静的字。</p>
-                <span class="more">查看 &gt;</span>
-              </div>
-              <ul class="hot">
-                <li><i class="th a"></i><span>精选好课<br /><em>零基础也能听</em></span></li>
-                <li><i class="th b"></i><span>最美中药名<br /><em>夜明砂 · 白头翁</em></span></li>
-                <li><i class="th c"></i><span>百度热议<br /><em>你听过几个</em></span></li>
-                <li><i class="th d"></i><span>每日新词往期<br /><em>点开即看</em></span></li>
-              </ul>
-            </div>
-            <div class="ad-row">
-              <div class="card"><i class="phc p1"></i><span>美到极致的中药名</span></div>
-              <div class="card"><i class="phc p2"></i><span>11 课外语免费学</span></div>
-              <div class="card"><i class="phc p3"></i><span>夜明砂是什么</span></div>
-            </div>
+            <ul class="ad-list">
+              <li><img src="./ad/ad-thumb-01-lupita.jpg" width="84" height="56" alt="露皮塔·尼永奥在柏林电影节开幕红毯" /><span><b>露皮塔亮相柏林开幕</b><em>2024 红毯现场</em></span></li>
+              <li><img src="./ad/ad-thumb-02-ana.jpg" width="84" height="56" alt="安娜·德·阿玛斯在 CinemaCon" /><span><b>安娜·德·阿玛斯</b><em>CinemaCon 见面会</em></span></li>
+              <li><img src="./ad/ad-thumb-03-alissa.jpg" width="84" height="56" alt="艾丽莎·容在柏林电影节颁奖礼" /><span><b>艾丽莎柏林颁奖礼</b><em>2025 领奖瞬间</em></span></li>
+              <li><img src="./ad/ad-thumb-04-cannes.jpg" width="84" height="56" alt="瓦格纳·莫拉、玛丽亚·费尔南达与加布里埃尔在戛纳红毯" /><span><b>戛纳红毯三人合影</b><em>《秘密特工》首映</em></span></li>
+            </ul>
           </div>
         </div>
         <footer class="ad-foot">

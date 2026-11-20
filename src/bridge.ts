@@ -47,6 +47,12 @@ export async function setBounds(bounds: Bounds): Promise<void> {
   await invoke("set_bounds", bounds);
 }
 
+export async function setChartVeil(spec: unknown): Promise<void> {
+  if (!inTauri()) return;
+  const { invoke } = await core();
+  await invoke("set_chart_veil", { spec });
+}
+
 export async function nav(action: "back" | "forward" | "reload"): Promise<void> {
   if (!inTauri()) return;
   const { invoke } = await core();

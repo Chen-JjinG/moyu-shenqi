@@ -1,4 +1,4 @@
-import { createMonitor, type Monitor } from "./charts";
+import { createMonitor, MEM_INSET, type Monitor } from "./charts";
 import {
   closeWindow,
   inTauri,
@@ -9,6 +9,7 @@ import {
   openUrl,
   setAlwaysOnTop,
   setBounds,
+  setChartVeil,
   setFiltered,
   setPageZoom,
   setWindowSize,
@@ -34,7 +35,7 @@ const THEME_SIZE: Record<ThemeId, [number, number]> = {
   vs: [960, 760],
   vscode: [1120, 740],
   idea: [1100, 740],
-  ad: [560, 448],
+  ad: [600, 520],
 };
 
 const TITLES: Record<ThemeId, string> = {
@@ -115,17 +116,27 @@ function hostOf(url: string): string {
   }
 }
 
+function pageLive(): boolean {
+  return !!state.url && !state.panic && !(state.theme === "vs" && state.heap);
+}
+
 function showMode(): Show {
   if (state.theme === "vs" && state.heap && !state.panic) return "heap";
-  const live = !!state.url && !state.panic;
-  if (live) return "page";
   if (state.theme === "vs") return "empty";
   if (state.theme === "ad") return "ad";
+  if (pageLive()) return "page";
   return "code";
 }
 
 function activeStage(): HTMLElement | null {
   return document.querySelector(`.theme-${state.theme} .stage`);
+}
+
+/** Where the live page is placed. VS Code and IntelliJ keep the editor stage. */
+function activeSlot(): HTMLElement | null {
+  if (state.theme === "vs") return document.getElementById("mem-slot");
+  if (state.theme === "ad") return document.getElementById("ad-hero");
+  return activeStage();
 }
 
 function applyChrome() {
@@ -135,6 +146,11 @@ function applyChrome() {
   app.dataset.filtered = filtered ? "1" : "0";
   document.body.dataset.theme = state.theme;
   document.documentElement.style.setProperty("--ui-scale", String(state.scale));
+  app.dataset.browsing = pageLive() && state.theme === "vs" ? "1" : "0";
+  if (pageLive() && state.theme === "vs") {
+    document.querySelector('.theme-vs [data-block="mem"]')?.classList.remove("collapsed");
+  }
+  syncPlotSlot();
   document.title = TITLES[state.theme];
   void setWindowTitle(TITLES[state.theme]);
   document.querySelectorAll(".js-pin").forEach((el) => el.classList.toggle("on", state.pinned));
@@ -191,14 +207,61 @@ function renderHeap() {
   }
 }
 
+function syncPlotSlot() {
+  const slot = document.getElementById("mem-slot");
+  if (slot) {
+    slot.style.top = `${MEM_INSET.top}px`;
+    slot.style.right = `${MEM_INSET.right}px`;
+    slot.style.bottom = `${MEM_INSET.bottom}px`;
+    slot.style.left = `${MEM_INSET.left}px`;
+  }
+  const veil = document.getElementById("mem-veil");
+  if (veil) {
+    veil.style.top = `${MEM_INSET.top}px`;
+    veil.style.left = `${MEM_INSET.left}px`;
+    veil.style.right = "auto";
+    veil.style.bottom = "auto";
+    veil.style.width = `calc(100% - ${MEM_INSET.left + MEM_INSET.right}px)`;
+    veil.style.height = `calc(100% - ${MEM_INSET.top + MEM_INSET.bottom}px)`;
+  }
+}
+
+let veilSent = false;
+
+function publishVeil() {
+  const live = pageLive() && state.theme === "vs" && !state.overlay;
+  const canvas = document.getElementById("mem-veil");
+  if (!live) {
+    canvas?.classList.remove("on");
+    if (veilSent) {
+      veilSent = false;
+      if (inTauri()) void setChartVeil(null);
+    }
+    return;
+  }
+  veilSent = true;
+  if (!inTauri()) {
+    canvas?.classList.add("on");
+    if (canvas instanceof HTMLCanvasElement) monitor.paintVeil(canvas, elapsed());
+    return;
+  }
+  canvas?.classList.remove("on");
+  void setChartVeil(monitor.veilSpec(elapsed()));
+}
+
+function redraw() {
+  monitor.draw(elapsed());
+  publishVeil();
+}
+
 function placeFallback() {
-  const stage = activeStage();
-  const live = showMode() === "page" && !inTauri();
-  if (!stage || !live) {
+  const slot = activeSlot();
+  const live = pageLive() && !state.overlay && !inTauri();
+  if (!slot || !live) {
     fallback.hidden = true;
     return;
   }
-  if (fallback.parentElement !== stage) stage.appendChild(fallback);
+  if (fallback.parentElement !== slot) slot.appendChild(fallback);
   fallback.hidden = false;
 }
 
@@ -457,7 +520,7 @@ function takeSnap() {
     saveSnaps();
     renderHeap();
   }
-  monitor.draw(t);
+  redraw();
   hud("已截取快照");
 }
 
@@ -472,7 +535,7 @@ function tick() {
       if (jb) jb.textContent = `${monitor.current().mem.toFixed(0)} MB / 512 MB`;
     }
   }
-  if (state.theme === "vs" && !document.hidden) monitor.draw(elapsed());
+  if (state.theme === "vs" && !document.hidden) redraw();
 }
 
 async function browse(action: "back" | "forward" | "reload") {
@@ -495,17 +558,19 @@ function requestBounds() {
 }
 
 async function pushBounds() {
-  const live = showMode() === "page" && !state.overlay;
-  const stage = activeStage();
+  const live = pageLive() && !state.overlay;
+  const slot = activeSlot();
   if (!inTauri()) {
     placeFallback();
+    publishVeil();
     return;
   }
-  if (!live || !stage) {
+  if (!live || !slot) {
     await setBounds({ x: 0, y: 0, width: 0, height: 0, visible: false });
+    publishVeil();
     return;
   }
-  const r = stage.getBoundingClientRect();
+  const r = slot.getBoundingClientRect();
   await setBounds({
     x: r.left,
     y: r.top,
@@ -513,6 +578,7 @@ async function pushBounds() {
     height: Math.max(0, r.height),
     visible: r.width > 8 && r.height > 8,
   });
+  publishVeil();
 }
 
 function onHotkey(cmd: string) {
@@ -616,15 +682,15 @@ function bind() {
   });
   document.getElementById("vs-zin")!.addEventListener("click", () => {
     monitor.zoomIn();
-    monitor.draw(elapsed());
+    redraw();
   });
   document.getElementById("vs-zout")!.addEventListener("click", () => {
     monitor.zoomOut();
-    monitor.draw(elapsed());
+    redraw();
   });
   document.getElementById("vs-zreset")!.addEventListener("click", () => {
     monitor.zoomReset();
-    monitor.draw(elapsed());
+    redraw();
   });
   document.getElementById("vs-pause")!.addEventListener("click", () => {
     state.paused = !state.paused;
@@ -651,10 +717,14 @@ function bind() {
   document.querySelectorAll(".block-h, .block-toggle").forEach((btn) => {
     btn.addEventListener("click", (ev) => {
       if ((ev.target as HTMLElement).closest(".legend")) return;
-      const block = (btn as HTMLElement).closest(".block");
+      const block = (btn as HTMLElement).closest(".block") as HTMLElement | null;
+      if (block?.dataset.block === "mem" && pageLive() && state.theme === "vs") {
+        block.classList.remove("collapsed");
+        return;
+      }
       block?.classList.toggle("collapsed");
       requestBounds();
-      monitor.draw(elapsed());
+      redraw();
     });
   });
   document.querySelectorAll(".resize").forEach((el) => {
@@ -671,7 +741,7 @@ function bind() {
   window.addEventListener("keydown", onKey, true);
   window.addEventListener("resize", () => {
     requestBounds();
-    monitor.draw(elapsed());
+    redraw();
     void rememberBounds();
   });
   const nomore = document.getElementById("ad-nomore") as HTMLInputElement;
@@ -683,12 +753,13 @@ function bind() {
     const root = document.querySelector(".theme-vs");
     if (root) {
       const ro = new ResizeObserver(() => {
-        if (state.theme === "vs") monitor.draw(elapsed());
+        if (state.theme === "vs") redraw();
         requestBounds();
       });
       ro.observe(root);
     }
   }
+  syncPlotSlot();
 }
 
 async function boot() {
@@ -701,9 +772,9 @@ async function boot() {
   applyChrome();
   const open = params.get("open");
   if (open) void go(open);
-  const redraw = () => monitor.draw(elapsed());
-  requestAnimationFrame(redraw);
-  window.addEventListener("load", redraw);
+  const paint = () => redraw();
+  requestAnimationFrame(paint);
+  window.addEventListener("load", paint);
   window.setInterval(tick, 1000);
   if (inTauri()) {
     await setAlwaysOnTop(state.pinned);
@@ -721,6 +792,7 @@ async function boot() {
     await listen<string>("page-load", (url) => {
       if (url && url !== "about:blank") state.url = url;
       applyChrome();
+      publishVeil();
     });
     await listen<string>("page-title", (title) => {
       state.title = title;
