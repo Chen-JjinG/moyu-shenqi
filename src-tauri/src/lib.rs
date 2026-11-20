@@ -15,7 +15,7 @@ const FILTER: &str = "invert(0.9) hue-rotate(180deg) grayscale(0.62) sepia(0.4) 
 
 /// Waveform overlay injected into the page. Painted above the document, clicks pass through.
 /// Colors match `paintFusedChart` in src/charts.ts. The filter stays on `body`, so this canvas is not recolored.
-const VEIL_JS: &str = r#"
+const VEIL_JS: &str = r##"
   let __veilSpec=null;
   function __veilCanvas(){
     let c=document.getElementById("diag-veil");
@@ -100,7 +100,7 @@ const VEIL_JS: &str = r#"
   }
   window.__diagVeil=__paintVeil;
   window.addEventListener("resize",function(){ if(__veilSpec) __paintVeil(__veilSpec); });
-"#;
+"##;
 
 fn boot_script(initial_on: bool) -> String {
     let initial = if initial_on { "true" } else { "false" };
