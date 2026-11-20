@@ -1,0 +1,65 @@
+name: Windows 构建
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存 Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建 Windows 程序
+        run: npm run build:win
+
+      - name: 收集单个可执行文件
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-win | Out-Null
+          Copy-Item -Force src-tauri\target\release\DiagnosticTools.exe dist-win\DiagnosticTools.exe
+          Get-ChildItem src-tauri\target\release\bundle\nsis\*.exe | Copy-Item -Destination dist-win\
+          Get-ChildItem dist-win | Format-Table Name, Length
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiagnosticTools-Windows
+          path: dist-win/*
+          if-no-files-found: error
+
+      - name: 发布到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.0
+          name: 诊断工具 0.1.0
+          make_latest: true
+          files: dist-win/*
+          body: |
+            双击 `DiagnosticTools.exe` 即可运行（需要系统里已有 WebView2，Windows 10/11 通常已经带了）。
+
+            如果双击没有反应，或提示缺少 WebView2，再运行同一个目录里的 `*-setup.exe`，它会装好运行库并创建开始菜单项。
+
+            窗口看起来像 Visual Studio 诊断工具。打开地址：Ctrl+L。置顶：标题栏图钉或 Ctrl+Shift+T。隐藏页面：Ctrl+`。

@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>诊断工具</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app" data-theme="vs" data-filtered="1">
+      <section class="theme theme-vs" data-theme="vs">
+        <header class="vs-title">
+          <span class="vs-name drag" data-drag>诊断工具</span>
+          <button class="chev js-menu" title="选项" type="button">▾</button>
+          <span class="drag spacer" data-drag></span>
+          <button class="icon-btn js-pin" title="置顶" type="button"></button>
+          <button class="icon-btn js-close" title="关闭" type="button">✕</button>
+        </header>
+        <div class="vs-toolbar">
+          <button class="tool js-menu" id="vs-gear" title="设置" type="button">
+            <svg viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M9.4 1.2l.4 1.8a4.8 4.8 0 0 1 1.3.8l1.7-.7 1.1 1.9-1.3 1.2a5 5 0 0 1 0 1.6l1.3 1.2-1.1 1.9-1.7-.7a4.8 4.8 0 0 1-1.3.8l-.4 1.8H6.6l-.4-1.8a4.8 4.8 0 0 1-1.3-.8l-1.7.7-1.1-1.9 1.3-1.2a5 5 0 0 1 0-1.6L2.1 5l1.1-1.9 1.7.7a4.8 4.8 0 0 1 1.3-.8l.4-1.8h2.8zM8 6.1A1.9 1.9 0 1 0 8 9.9 1.9 1.9 0 0 0 8 6.1z"/></svg>
+            <span class="caret">▾</span>
+          </button>
+          <button class="tool" id="vs-export" title="导出会话" type="button">
+            <svg viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M3 9.5V13h10V9.5h-1.2v2.3H4.2V9.5H3zM8.6 2.2v6.1l1.8-1.8.9.9L8 10.7 4.7 7.4l.9-.9 1.8 1.8V2.2h1.2z"/></svg>
+          </button>
+          <button class="tool" id="vs-zin" title="放大" type="button">
+            <svg viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M7 2a5 5 0 1 0 3.1 8.9l2.8 2.8.9-.9-2.8-2.8A5 5 0 0 0 7 2zm0 1.2a3.8 3.8 0 1 1 0 7.6 3.8 3.8 0 0 1 0-7.6zM6.4 6.4V4.8h1.2v1.6h1.6v1.2H7.6v1.6H6.4V7.6H4.8V6.4h1.6z"/></svg>
+          </button>
+          <button class="tool" id="vs-zout" title="缩小" type="button">
+            <svg viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M7 2a5 5 0 1 0 3.1 8.9l2.8 2.8.9-.9-2.8-2.8A5 5 0 0 0 7 2zm0 1.2a3.8 3.8 0 1 1 0 7.6 3.8 3.8 0 0 1 0-7.6zM4.8 6.4h4.4v1.2H4.8V6.4z"/></svg>
+          </button>
+          <button class="tool" id="vs-zreset" title="重置缩放" type="button">
+            <svg viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 2.2a5.8 5.8 0 1 0 5.2 3.2l-1.1.4A4.6 4.6 0 1 1 8 3.4V5l2.6-2.2L8 1v1.2z"/></svg>
+          </button>
+        </div>
+        <div class="vs-session">诊断会话: <b id="vs-secs">0</b> 秒</div>
+        <div class="ruler-wrap"><canvas id="c-ruler"></canvas></div>
+        <div class="block" data-block="events">
+          <button class="block-h" type="button"><i class="chev"></i>事件</button>
+          <div class="block-body event-row">
+            <button class="pause" id="vs-pause" title="暂停" type="button"><span></span><span></span></button>
+            <canvas id="c-events"></canvas>
+          </div>
+        </div>
+        <div class="block" data-block="mem">
+          <div class="block-h mem-h">
+            <button type="button" class="block-toggle"><i class="chev"></i>进程内存 (MB)</button>
+            <div class="legend">
+              <span><i class="mark gc"></i>GC</span>
+              <span><i class="mark snap"></i>快照</span>
+              <span><i class="mark bytes"></i>专用字节</span>
+            </div>
+          </div>
+          <div class="block-body plot plot-mem"><canvas id="c-mem"></canvas></div>
+        </div>
+        <div class="block" data-block="cpu">
+          <button class="block-h" type="button"><i class="chev"></i>CPU (所有处理器的百分比)</button>
+          <div class="block-body plot plot-cpu"><canvas id="c-cpu"></canvas></div>
+        </div>
+        <div class="vs-tabs" role="tablist">
+          <button type="button" data-tab="summary" role="tab">摘要</button>
+          <button type="button" data-tab="events" role="tab">事件</button>
+          <button type="button" data-tab="memory" class="on" role="tab">内存使用率</button>
+          <button type="button" data-tab="cpu" role="tab">CPU 使用率</button>
+        </div>
+        <div class="vs-actions">
+          <button type="button" id="vs-snap" class="text-btn"><i class="cam"></i>截取快照</button>
+          <button type="button" id="vs-heap" class="text-btn"><i class="heap"></i>查看堆</button>
+          <span class="hint" id="vs-hint">检查 CPU 在您的应用程序中的使用位置</span>
+        </div>
+        <div class="vs-cols">
+          <span>ID</span><span>时间</span><span>对象(差异)</span><span>堆大小(差异)</span><span>标签</span>
+        </div>
+        <div class="stage" data-show="empty">
+          <div class="ph ph-empty">
+            <p>尚无可用快照。</p>
+            <p class="link">拍摄快照以查看内存使用情况</p>
+          </div>
+          <div class="ph ph-heap"><div id="heap-rows"></div></div>
+        </div>
+      </section>
+
+      <section class="theme theme-vscode" data-theme="vscode">
+        <header class="vsc-title">
+          <span class="vsc-logo" aria-hidden="true"></span>
+          <nav class="vsc-menu">
+            <span>文件</span><span>编辑</span><span>选择</span><span>查看</span><span>转到</span><span>运行</span><span>终端</span><span>帮助</span>
+          </nav>
+          <span class="drag spacer" data-drag>Diagnostics.cs — DiagnosticSession — Visual Studio Code</span>
+          <button class="icon-btn js-menu" title="选项" type="button">···</button>
+          <button class="icon-btn js-pin" title="置顶" type="button"></button>
+          <button class="win-btn js-min" title="最小化" type="button">—</button>
+          <button class="win-btn js-max" title="最大化" type="button">□</button>
+          <button class="win-btn close js-close" title="关闭" type="button">✕</button>
+        </header>
+        <div class="vsc-body">
+          <aside class="vsc-activity">
+            <i class="act on" title="资源管理器"></i>
+            <i class="act search" title="搜索"></i>
+            <i class="act branch" title="源代码管理"></i>
+            <i class="act debug" title="运行和调试"></i>
+            <i class="act ext" title="扩展"></i>
+          </aside>
+          <aside class="vsc-side">
+            <div class="side-h">资源管理器</div>
+            <div class="side-sec">DIAGNOSTICSESSION</div>
+            <ul class="tree">
+              <li class="dir open">src</li>
+              <li class="file on">Diagnostics.cs</li>
+              <li class="file">Program.cs</li>
+              <li class="file">SessionMonitor.cs</li>
+              <li class="dir">Properties</li>
+              <li class="file dim">AssemblyInfo.cs</li>
+              <li class="file dim">App.config</li>
+            </ul>
+          </aside>
+          <div class="vsc-main">
+            <div class="vsc-tabs">
+              <div class="etab on"><i class="cs"></i>Diagnostics.cs<span class="x">×</span></div>
+              <div class="etab"><i class="cs"></i>Program.cs</div>
+            </div>
+            <div class="crumb">src &nbsp;&gt;&nbsp; DiagnosticSession &nbsp;&gt;&nbsp; SessionMonitor</div>
+            <div class="stage" data-show="code">
+              <div class="ph ph-code">
+                <pre class="code csharp"><code><span class="ln"> 1</span><span class="kw">using</span> System;
+<span class="ln"> 2</span><span class="kw">using</span> System.Diagnostics;
+<span class="ln"> 3</span>
+<span class="ln"> 4</span><span class="kw">namespace</span> <span class="ty">DiagnosticSession</span>
+<span class="ln"> 5</span>{
+<span class="ln"> 6</span>    <span class="kw">internal static class</span> <span class="ty">SessionMonitor</span>
+<span class="ln"> 7</span>    {
+<span class="ln"> 8</span>        <span class="kw">static readonly</span> <span class="ty">Stopwatch</span> Clock = <span class="ty">Stopwatch</span>.StartNew();
+<span class="ln"> 9</span>
+<span class="ln">10</span>        <span class="kw">public static void</span> <span class="fn">Sample</span>(<span class="ty">Process</span> process)
+<span class="ln">11</span>        {
+<span class="ln">12</span>            <span class="kw">long</span> mem = process.WorkingSet64 / (1024 * 1024);
+<span class="ln">13</span>            <span class="kw">double</span> sec = Clock.Elapsed.TotalSeconds;
+<span class="ln">14</span>            <span class="ty">Trace</span>.WriteLine(<span class="st">$"t={sec:0.0}s mem={mem}MB"</span>);
+<span class="ln">15</span>        }
+<span class="ln">16</span>    }
+<span class="ln">17</span>}
+</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+        <footer class="vsc-status">
+          <span class="pill">诊断会话</span>
+          <span class="st">⊘ 0</span>
+          <span class="st">⚠ 0</span>
+          <span class="spacer"></span>
+          <span>Ln 14, Col 13</span>
+          <span>空格: 4</span>
+          <span>UTF-8</span>
+          <span>CRLF</span>
+          <span>C#</span>
+        </footer>
+      </section>
+
+      <section class="theme theme-idea" data-theme="idea">
+        <header class="jb-title">
+          <span class="jb-logo" aria-hidden="true"></span>
+          <span class="drag jb-proj" data-drag>DiagnosticSession</span>
+          <span class="drag spacer" data-drag>SessionMonitor.java</span>
+          <button class="icon-btn js-menu" title="选项" type="button">⚙</button>
+          <button class="icon-btn js-pin" title="置顶" type="button"></button>
+          <button class="win-btn js-min" title="最小化" type="button">—</button>
+          <button class="win-btn js-max" title="最大化" type="button">□</button>
+          <button class="win-btn close js-close" title="关闭" type="button">✕</button>
+        </header>
+        <div class="jb-toolbar">
+          <button type="button" class="jb-run" title="运行">▶</button>
+          <button type="button" class="jb-bug" title="调试">🐞</button>
+          <span class="jb-cfg">SessionMonitor</span>
+          <span class="spacer"></span>
+          <span class="jb-search">搜索文件</span>
+        </div>
+        <div class="jb-body">
+          <div class="jb-stripe">
+            <span class="on" title="项目">项</span>
+            <span title="提交">交</span>
+            <span title="结构">构</span>
+          </div>
+          <aside class="jb-side">
+            <div class="side-h">项目</div>
+            <ul class="tree jb">
+              <li class="dir open">DiagnosticSession</li>
+              <li class="dir open">src</li>
+              <li class="dir open">main</li>
+              <li class="dir open">java</li>
+              <li class="dir open">app</li>
+              <li class="file on">SessionMonitor.java</li>
+              <li class="file">Main.java</li>
+              <li class="file dim">module-info.java</li>
+            </ul>
+          </aside>
+          <div class="jb-main">
+            <div class="jb-tabs">
+              <div class="etab on"><i class="jv"></i>SessionMonitor.java<span class="x">×</span></div>
+              <div class="etab"><i class="jv"></i>Main.java</div>
+            </div>
+            <div class="stage" data-show="code">
+              <div class="ph ph-code">
+                <pre class="code java"><code><span class="ln"> 1</span><span class="kw">package</span> app;
+<span class="ln"> 2</span>
+<span class="ln"> 3</span><span class="kw">public final class</span> <span class="ty">SessionMonitor</span> {
+<span class="ln"> 4</span>    <span class="kw">private final long</span> startedAt = System.<span class="fn">nanoTime</span>();
+<span class="ln"> 5</span>
+<span class="ln"> 6</span>    <span class="kw">public void</span> <span class="fn">sample</span>() {
+<span class="ln"> 7</span>        Runtime rt = Runtime.<span class="fn">getRuntime</span>();
+<span class="ln"> 8</span>        <span class="kw">long</span> used = (rt.<span class="fn">totalMemory</span>() - rt.<span class="fn">freeMemory</span>()) / (1024 * 1024);
+<span class="ln"> 9</span>        <span class="kw">double</span> seconds = (System.<span class="fn">nanoTime</span>() - startedAt) / 1_000_000_000.0;
+<span class="ln">10</span>        System.out.<span class="fn">printf</span>(<span class="st">"t=%.1fs mem=%dMB%n"</span>, seconds, used);
+<span class="ln">11</span>    }
+<span class="ln">12</span>}
+</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+        <footer class="jb-status">
+          <span id="jb-mem">16 MB / 512 MB</span>
+          <span class="spacer"></span>
+          <span>UTF-8</span>
+          <span>LF</span>
+          <span>4 空格</span>
+          <span>12:8</span>
+        </footer>
+      </section>
+
+      <section class="theme theme-ad" data-theme="ad">
+        <header class="ad-title">
+          <span class="ad-ico" aria-hidden="true"></span>
+          <span class="ad-name">搜狗每日新词</span>
+          <button class="ad-chev js-menu" title="选项" type="button">▾</button>
+          <span class="drag spacer" data-drag></span>
+          <button class="icon-btn js-pin ad-pin" title="置顶" type="button"></button>
+          <button class="ad-x js-close" title="关闭" type="button">✕</button>
+        </header>
+        <div class="stage ad-stage" data-show="ad">
+          <div class="ph ph-ad">
+            <div class="ad-top">
+              <div class="ad-brand">
+                <span class="hj">沪</span>
+                <div>
+                  <strong>沪江网校</strong>
+                  <small>外语好课 · 随时学</small>
+                </div>
+              </div>
+              <div class="ad-offer">
+                <div class="price"><b>9</b>元微课学</div>
+                <div class="sub">11课外语任你选</div>
+              </div>
+              <div class="mascot" aria-hidden="true">
+                <div class="bubble">今天的词<br />很安静</div>
+                <div class="face"></div>
+              </div>
+            </div>
+            <div class="ad-headline">中医文化：美到极致的中药名</div>
+            <div class="ad-grid">
+              <div class="paper">
+                <div class="py">yè &nbsp; míng &nbsp; shā</div>
+                <div class="word">夜明砂</div>
+                <p>名字干净得像夜里的细沙。旧方里它是一味平肝明目的药，听着却像一句诗。美到极致的中药名，往往不是花，是这种安静的字。</p>
+                <span class="more">查看 &gt;</span>
+              </div>
+              <ul class="hot">
+                <li><i class="th a"></i><span>精选好课<br /><em>零基础也能听</em></span></li>
+                <li><i class="th b"></i><span>最美中药名<br /><em>夜明砂 · 白头翁</em></span></li>
+                <li><i class="th c"></i><span>百度热议<br /><em>你听过几个</em></span></li>
+                <li><i class="th d"></i><span>每日新词往期<br /><em>点开即看</em></span></li>
+              </ul>
+            </div>
+            <div class="ad-row">
+              <div class="card"><i class="phc p1"></i><span>美到极致的中药名</span></div>
+              <div class="card"><i class="phc p2"></i><span>11 课外语免费学</span></div>
+              <div class="card"><i class="phc p3"></i><span>夜明砂是什么</span></div>
+            </div>
+          </div>
+        </div>
+        <footer class="ad-foot">
+          <label><input id="ad-nomore" type="checkbox" /> 不再提示</label>
+        </footer>
+      </section>
+
+      <div class="resize n" data-dir="North"></div>
+      <div class="resize s" data-dir="South"></div>
+      <div class="resize e" data-dir="East"></div>
+      <div class="resize w" data-dir="West"></div>
+      <div class="resize ne" data-dir="NorthEast"></div>
+      <div class="resize nw" data-dir="NorthWest"></div>
+      <div class="resize se" data-dir="SouthEast"></div>
+      <div class="resize sw" data-dir="SouthWest"></div>
+    </div>
+
+    <div id="addr" hidden>
+      <input id="addr-input" type="text" spellcheck="false" autocomplete="off" placeholder="输入地址" />
+    </div>
+    <div id="menu" hidden></div>
+    <div id="hud" hidden></div>
+    <iframe id="fallback" class="fallback" hidden title=""></iframe>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
